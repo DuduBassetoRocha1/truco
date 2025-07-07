@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Truco Paulista 2x2</title>
+<style>
+  body {
+    margin: 0;
+    font-family: sans-serif;
+    background: url(fundo-de-mesa-de-poquer-em-gradiente_23-2151085419.jpg.avif) no-repeat center center fixed;
+    background-size: cover;
+    color: white;
+  }
+  .mesa {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .painel {
+    position: absolute;
+    top: 20px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 1.2em;
+    z-index: 10;
+  }
+  .jogador {
+    position: absolute;
+    text-align: center;
+  }
+  .jogador img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid white;
+  }
+  .mao {
+    position: absolute;
+    bottom: 40px;
+    display: flex;
+    gap: 10px;
+  }
+  .mao img {
+    width: 60px;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .mao img:hover {
+    transform: scale(1.1);
+  }
+  .botoes {
+    position: absolute;
+    bottom: 10px;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+  }
+  .botoes button {
+    padding: 10px 20px;
+    font-size: 1em;
+    background: #007bff;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+  }
+  #vira {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid white;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.7);
+    width: 40px;
+    height: 56px;
+    overflow: hidden;
+    background: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #vira img {
+    width: 100%;
+    height: auto;
+  }
+  #mesa-central-jogada {
+    position: absolute;
+    top: 55%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30px;
+    color: white;
+    font-weight: bold;
+    font-size: 1em;
+    text-align: center;
+    z-index: 5;
+  }
+  #mesa-central-jogada div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #mesa-central-jogada img {
+    width: 50px;
+    border-radius: 8px;
+    border: 2px solid white;
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+<div class="mesa">
+  <div class="painel">
+    Placar: <span id="placar">0 x 0</span> | Valor da Mão: <span id="valor-mao">1</span> | Rodada: <span id="rodada-numero">1</span>
+  </div>
+
+  <div class="jogador" style="top: 10px; left: 50%; transform: translateX(-50%);">
+    <img src="https://i.imgur.com/jf4Fj4p.png" />
+    <div>Jogador 2 (Adversário)</div>
+  </div>
+  <div class="jogador" style="top: 50%; left: 10px; transform: translateY(-50%);">
+    <img src="https://i.imgur.com/jf4Fj4p.png" />
+    <div>Jogador 3 (Seu Parceiro)</div>
+  </div>
+  <div class="jogador" style="top: 50%; right: 10px; transform: translateY(-50%);">
+    <img src="https://i.imgur.com/jf4Fj4p.png" />
+    <div>Jogador 4 (Adversário)</div>
+  </div>
+
+  <div id="vira"></div>
+  <div id="mesa-central-jogada"></div>
+  <div class="mao" id="mao"></div>
+
+  <div class="botoes">
+    <button onclick="pedirTruco()">Truco</button>
+    <button onclick="correr()">Correr</button>
+  </div>
+</div>
+
+<script>
+  // Ordem das cartas (sem 8,9,10)
+  const ordemCartas = ['4', '5', '6', '7', 'Q', 'J', 'K', 'A', '2', '3'];
+  // Ordem dos naipes para desempate entre manilhas: paus > copas > espadas > ouros
+  const ordemNaipe = { 'C': 4, 'H': 3, 'S': 2, 'D': 1 };
+
+  const baralho = [];
+  const naipes = ['C', 'D', 'H', 'S'];
+
+  const jogadores = [
+    { nome: 'Você', mao: [], equipe: 1 },
+    { nome: 'Jogador 2', mao: [], equipe: 2 },
+    { nome: 'Jogador 3', mao: [], equipe: 1 },
+    { nome: 'Jogador 4', mao: [], equipe: 2 },
+  ];
+
+  let manilhaValor = '';
+  let valorMao = 1;
+  let placar = [0, 0];
+  let cartasNaMesa = [];
+  let vitoriasEquipe1 = 0;
+  let vitoriasEquipe2 = 0;
+  let rodadaAtual = 1;
+  let ultimoVencedorEquipe = 0;
+  let maoDeOnze = false;
+
+  let vezJogador = 0; // controla a vez de jogar: 0,1,2,3
+
+  function embaralhar() {
+    baralho.length = 0;
+    for (let valor of ordemCartas) {
+      for (let naipe of naipes) {
+        baralho.push({ valor, naipe, img: `https://deckofcardsapi.com/static/img/${valor}${naipe}.png` });
+      }
+    }
+    for (let i = baralho.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [baralho[i], baralho[j]] = [baralho[j], baralho[i]];
+    }
+  }
+
+  function distribuirCartas(qtd = 3) {
+    jogadores.forEach(j => j.mao = []);
+    for (let i = 0; i < qtd; i++) {
+      jogadores.forEach(jogador => {
+        jogador.mao.push(baralho.pop());
+      });
+    }
+  }
+
+  function getManilhaValor(viraValor) {
+    const idx = ordemCartas.indexOf(viraValor);
+    return ordemCartas[(idx + 1) % ordemCartas.length];
+  }
+
+  function renderizarMao() {
+    const maoEl = document.getElementById('mao');
+    maoEl.innerHTML = '';
+    jogadores[0].mao.forEach((carta, idx) => {
+      const img = document.createElement('img');
+      img.src = carta.img;
+      img.title = `${carta.valor}${carta.naipe}`;
+      img.style.opacity = vezJogador === 0 ? '1' : '0.5'; // indica se pode jogar ou não
+      img.style.cursor = vezJogador === 0 ? 'pointer' : 'default';
+      img.onclick = () => {
+        if(vezJogador !== 0) {
+          alert('Não é a sua vez de jogar!');
+          return;
+        }
+        if(maoDeOnze && jogadores[0].mao.length !== 1){
+          alert('Na mão de 11 só pode jogar uma carta.');
+          return;
+        }
+        jogarCarta(0, idx);
+      };
+      maoEl.appendChild(img);
+    });
+  }
+
+  function mostrarCartasNaMesa() {
+    const mesaEl = document.getElementById('mesa-central-jogada');
+    mesaEl.innerHTML = '';
+    cartasNaMesa.forEach(c => {
+      const div = document.createElement('div');
+      div.innerHTML = `<img src="${c.carta.img}" alt=""><span>${c.jogador}</span>`;
+      mesaEl.appendChild(div);
+    });
+  }
+
+  function ehManilha(carta) {
+    return carta.valor === manilhaValor;
+  }
+
+  function compararCartas(a, b) {
+    const aManilha = ehManilha(a.carta);
+    const bManilha = ehManilha(b.carta);
+
+    if (aManilha && bManilha) {
+      return ordemNaipe[a.carta.naipe] - ordemNaipe[b.carta.naipe];
+    }
+    if (aManilha) return 1;
+    if (bManilha) return -1;
+
+    return ordemCartas.indexOf(b.carta.valor) - ordemCartas.indexOf(a.carta.valor);
+  }
+
+  function jogarCarta(jogadorIdx, cartaIdx) {
+    if (jogadorIdx !== vezJogador) {
+      alert(`Não é a vez do ${jogadores[jogadorIdx].nome}!`);
+      return;
+    }
+
+    const carta = jogadores[jogadorIdx].mao.splice(cartaIdx, 1)[0];
+    cartasNaMesa.push({ jogador: jogadores[jogadorIdx].nome, carta, equipe: jogadores[jogadorIdx].equipe });
+    mostrarCartasNaMesa();
+    if (jogadorIdx === 0) renderizarMao();
+
+    // Passar a vez para o próximo jogador
+    vezJogador = (vezJogador + 1) % jogadores.length;
+
+    // Se ainda não terminaram as 4 cartas, faz a jogada do próximo (bot)
+    if (cartasNaMesa.length < 4) {
+      if (vezJogador !== 0) {
+        setTimeout(() => {
+          jogarCartaBot(vezJogador);
+        }, 800);
+      }
+    } else {
+      // Todos jogaram, verifica o vencedor da rodada
+      setTimeout(verificarRodada, 1000);
+    }
+  }
+
+  function jogarCartaBot(jogadorIdx) {
+    if (jogadores[jogadorIdx].mao.length === 0) return;
+    // Aqui pode ter uma estratégia para o bot escolher a carta, por enquanto pega a última
+    const cartaIdx = jogadores[jogadorIdx].mao.length - 1;
+    jogarCarta(jogadorIdx, cartaIdx);
+  }
+
+  function verificarRodada() {
+    let vencedora = cartasNaMesa[0];
+    let empateNaRodada = false;
+
+    for (let i = 1; i < cartasNaMesa.length; i++) {
+      let comp = compararCartas(cartasNaMesa[i], vencedora);
+      if (comp === 0) empateNaRodada = true;
+      else if (comp > 0) {
+        vencedora = cartasNaMesa[i];
+        empateNaRodada = false;
+      }
+    }
+
+    if (empateNaRodada) {
+      alert(`Rodada ${rodadaAtual} empatada (cangado)!`);
+      if (ultimoVencedorEquipe) {
+        if (ultimoVencedorEquipe === 1) vitoriasEquipe1++;
+        else vitoriasEquipe2++;
+      } else {
+        alert('Primeira rodada empatada, ninguém ganha ponto.');
+      }
+    } else {
+      alert(`${vencedora.jogador} venceu a rodada ${rodadaAtual}!`);
+      if (vencedora.equipe === 1) vitoriasEquipe1++;
+      else vitoriasEquipe2++;
+      ultimoVencedorEquipe = vencedora.equipe;
+    }
+
+    rodadaAtual++;
+    cartasNaMesa = [];
+    document.getElementById('mesa-central-jogada').innerHTML = '';
+
+    atualizarPlacar();
+    document.getElementById('rodada-numero').textContent = rodadaAtual;
+
+    if (vitoriasEquipe1 === 2 || vitoriasEquipe2 === 2 || rodadaAtual > 3) {
+      encerrarMao();
+    } else {
+      // Nova rodada - quem ganhou começa jogando (se empate, mantém o mesmo)
+      vezJogador = ultimoVencedorEquipe === 1 ? 0 : 1;
+      if (vezJogador !== 0) {
+        setTimeout(() => jogarCartaBot(vezJogador), 800);
+      }
+      renderizarMao();
+    }
+  }
+
+  function encerrarMao() {
+    if (vitoriasEquipe1 > vitoriasEquipe2) {
+      placar[0] += valorMao;
+      alert(`Você e seu parceiro venceram a mão e ganharam ${valorMao} pontos!`);
+    } else if (vitoriasEquipe2 > vitoriasEquipe1) {
+      placar[1] += valorMao;
+      alert(`Os adversários venceram a mão e ganharam ${valorMao} pontos!`);
+    } else {
+      alert('Mão empatada! Ninguém pontua.');
+    }
+
+    atualizarPlacar();
+
+    if (placar[0] >= 11 || placar[1] >= 11) {
+      iniciarMaoDeOnze();
+    } else {
+      novaMao();
+    }
+  }
+
+  function novaMao() {
+    vitoriasEquipe1 = 0;
+    vitoriasEquipe2 = 0;
+    rodadaAtual = 1;
+    ultimoVencedorEquipe = 0;
+    valorMao = 1;
+    maoDeOnze = false;
+    vezJogador = 0;
+
+    document.getElementById('valor-mao').textContent = valorMao;
+    document.getElementById('rodada-numero').textContent = rodadaAtual;
+    cartasNaMesa = [];
+    document.getElementById('mesa-central-jogada').innerHTML = '';
+
+    embaralhar();
+    distribuirCartas(3);
+    const vira = baralho.pop();
+    manilhaValor = getManilhaValor(vira.valor);
+    document.getElementById('vira').innerHTML = `<img src="${vira.img}" alt="Vira">`;
+
+    renderizarMao();
+
+    // Se quem começa não for o jogador humano, já começa jogando o bot
+    if (vezJogador !== 0) {
+      setTimeout(() => jogarCartaBot(vezJogador), 800);
+    }
+  }
+
+  function iniciarMaoDeOnze() {
+    maoDeOnze = true;
+    alert('Mão de 11 pontos ativada! Cada jogador recebe 1 carta e não pode conversar.');
+
+    vitoriasEquipe1 = 0;
+    vitoriasEquipe2 = 0;
+    rodadaAtual = 1;
+    ultimoVencedorEquipe = 0;
+    valorMao = 1;
+    vezJogador = 0;
+
+    document.getElementById('valor-mao').textContent = valorMao;
+    document.getElementById('rodada-numero').textContent = rodadaAtual;
+    cartasNaMesa = [];
+    document.getElementById('mesa-central-jogada').innerHTML = '';
+
+    embaralhar();
+    distribuirCartas(1);
+    const vira = baralho.pop();
+    manilhaValor = getManilhaValor(vira.valor);
+    document.getElementById('vira').innerHTML = `<img src="${vira.img}" alt="Vira">`;
+
+    renderizarMao();
+
+    if (vezJogador !== 0) {
+      setTimeout(() => jogarCartaBot(vezJogador), 800);
+    }
+  }
+
+  function atualizarPlacar() {
+    document.getElementById('placar').textContent = `${placar[0]} x ${placar[1]}`;
+  }
+
+  function pedirTruco() {
+    if (maoDeOnze) {
+      alert('Não pode pedir truco na mão de 11!');
+      return;
+    }
+    if (valorMao === 1) valorMao = 3;
+    else if (valorMao === 3) valorMao = 6;
+    else if (valorMao === 6) valorMao = 9;
+    else if (valorMao === 9) valorMao = 12;
+    document.getElementById('valor-mao').textContent = valorMao;
+    alert('Truco pedido! Valor da mão agora é: ' + valorMao);
+  }
+
+  function correr() {
+    alert('Você correu! Os adversários ganham ' + valorMao + ' pontos.');
+    placar[1] += valorMao;
+    atualizarPlacar();
+    novaMao();
+  }
+
+  function iniciarJogo() {
+    embaralhar();
+    distribuirCartas(3);
+    const vira = baralho.pop();
+    manilhaValor = getManilhaValor(vira.valor);
+    document.getElementById('vira').innerHTML = `<img src="${vira.img}" alt="Vira">`;
+    atualizarPlacar();
+    vezJogador = 0;
+    renderizarMao();
+
+    // Se quem começa não for o jogador humano, começa jogando o bot
+    if (vezJogador !== 0) {
+      setTimeout(() => jogarCartaBot(vezJogador), 800);
+    }
+  }
+
+  iniciarJogo();
+</script>
+</body>
+</html>
